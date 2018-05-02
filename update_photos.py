@@ -65,17 +65,12 @@ def organize_photos():
                fullname = os.path.join(dirpath,filename)
                # copy to tmp dir
                shutil.copy(fullname, pictmpdir)  
-
-               # if there is a matching CR2 raw file, move that as well
-               # assumes the raw file is in the same directory as jpj file
-               # This if for Canon Raw files, if ever get new model camera
-               # would have to update extension
-               for ext in ['.CR2','.cr2'] :
-                  stripext = fullname.split('.')[:-1]
-                  newfull = '.'.join(stripext)+ext
-                  if os.path.isfile(newfull):
-                     basename = '.'.join(stripext).split('/')[-1]
-                     shutil.copyfile(newfull, rawtmpdir+'/'+basename+'.CR2')  
+             
+            # find cr2 raw, case insensitive
+            for filename in fnmatch.filter(filenames, '*.[Cc][Rr]2'):
+               fullname = os.path.join(dirpath,filename)
+               newfullname = fullname.split('/')[-1].split('.')[0]+'.CR2'
+               shutil.copyfile(fullname, newfullname)  
                   
    # use jhead to move to date specific directory
    # cmd can't be a list, and must use shell=True
