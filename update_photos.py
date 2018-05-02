@@ -66,15 +66,14 @@ def organize_photos():
                      # replace jpg extension with CR2 extension and try to copy
                      stripext = fullname.split('.')[:-1]
                      newfull = '.'.join(stripext)+ext
-                     shutil.copy(newfull, pictmpdir)  
+                     shutil.copy(newfull, rawtmpdir)  
                   except:
                      pass
                   
    # use jhead to move to date specific directory
-   subprocess.call(['jhead',
-                    '-autorot',
-                    '-n'+picsavdir+'/%Y/%m/%f', 
-                     pictmpdir+'/*'])
+   # cmd can't be a list, and must use shell=True
+   jheadcmd = 'jhead -autorot -n'+picsavdir+'/%Y/%m/%f '+pictmpdir+'/*'
+   subprocess.call(jheadcmd, shell=True)
 
    
    #Now any movie files
