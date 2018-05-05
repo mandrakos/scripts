@@ -1,6 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-from __future__ import print_function
 import sys
 import fnmatch
 import os
@@ -33,72 +32,109 @@ def organize_photos():
    parser = argparse.ArgumentParser()
    parser.add_argument('searchpath', metavar='search-path')
    parser.add_argument('picsavdir', metavar='out-dir')
+   parser.add_argument('--no-pics', action='store_true')
+   parser.add_argument('--no-movies', action='store_true')
+   parser.add_argument('--no-raw', action='store_true')
 
-   skipdirs = ['.@__thumb','@Recycle']
+   skipdirs = ['.streams','.@__thumb','@Recycle']
 
    args = parser.parse_args()
    searchpath = args.searchpath
    picsavdir = args.picsavdir
+   rawsavdir = picsavdir+'/raw/'
+   movsavdir = picsavdir+'/movies/'
  
    # jhead moves the photos (not copy), so use a temporary directory in case something
    # goes horribly awry. Separately we'll use fdupes to remove pictures from searchpath.
    pictmpdir = '/share/homes/john/photo_xfer/organize_photos'
    rawtmpdir = '/share/homes/john/photo_xfer/raw'
-   rawsavdir = '/share/pictures/raw'
+   movtmpdir = '/share/homes/john/photo_xfer/movies'
 
    # move JPG files to temp and rename with time stamp
-   for d in [pictmpdir, rawtmpdir]:
+   for d in [pictmpdir, rawtmpdir, movtmpdir]:
       mkdir_p(d)
+
+   picfiles = []
+   cr2files = []
+   movfiles = []
 
    for dirpath, dirnames, filenames in os.walk(searchpath):
       # if there are no filenames there's nothing to do
-      print(dirpath)
-
       if filenames:
          # ignore files in thumbnail and recycle dirs
-         parentdir = dirpath.split('/')[-1]
-         if parentdir not in skipdirs:
-
+         if not any (s in dirpath for s in skipdirs):
+            print(dirpath)
             # find jpg, case insensitive
-            for filename in fnmatch.filter(filenames, '*.[Jj][Pp][Gg]'):
-
-               fullname = os.path.join(dirpath,filename)
-               # copy to tmp dir
-               shutil.copy(fullname, pictmpdir)  
+            if not args.no_pics:
+               for filename in fnmatch.filter(filenames, '*.[Jj][Pp][Gg]'):
+                  mkdir_p(pictmpdir+'/'+dirpath)
+                  fullname = os.path.join(dirpath,filename)
+                  copiedfile = pictmpdir+'/'+dirpath+'/'+filename.replace(" ","_")
+                  picfiles.append(copiedfile)
+                  shutil.copyfile(fullname, copiedfile)  
              
             # find cr2 raw, case insensitive
-            for filename in fnmatch.filter(filenames, '*.[Cc][Rr]2'):
-               fullname = os.path.join(dirpath,filename)
-               newfullname = fullname.split('/')[-1].split('.')[0]+'.CR2'
-               shutil.copyfile(fullname, newfullname)  
+            if not args.no_raw:
+               for filename in fnmatch.filter(filenames, '*.[Cc][Rr][2]'):
+                  mkdir_p(rawtmpdir+'/'+dirpath)
+                  fullname = os.path.join(dirpath,filename)
+                  copiedfile = rawtmpdir+'/'+dirpath+'/'+filename.split('/')[-1].split('.')[0]+'.CR2'
+                  copiedfile = copiedfile.replace(" ","_")
+                  cr2files.append(copiedfile)
+                  shutil.copyfile(fullname, copiedfile)  
+
+            # find movie files
+            if not args.no_movies:
+               regexes = ['*.[Mm][Oo][Vv]','*.[Mm][Pp][4]']
+               for regex in regexes:
+                  for filename in fnmatch.filter(filenames, regex):
+                     mkdir_p(movtmpdir+'/'+dirpath)
+                     fullname = os.path.join(dirpath,filename)
+                     copiedfile = movtmpdir+'/'+dirpath+'/'+filename.replace(" ","_")
+                     movfiles.append(copiedfile)
+                     shutil.copyfile(fullname, copiedfile)  
+
                   
    # use jhead to move to date specific directory
    # cmd can't be a list, and must use shell=True
-   jheadcmd = 'jhead -autorot -n'+picsavdir+'/%Y/%m/%f '+pictmpdir+'/*'
-   subprocess.call(jheadcmd, shell=True)
+   if picfiles:
+      jheadcmd = ['jhead','-autorot','-n'+picsavdir+'/%Y/%m/%f'] +picfiles
+      subprocess.call(jheadcmd)
 
-   # use exiftool to get created date for year/month directory structure
-   out = subprocess.check_output('exiftool -createdate '+rawtmpdir+'/*.CR2', shell=True).split('\n')[:-2]
+   if cr2files:
+      # use exiftool to get created date for year/month directory structure
+      out = subprocess.check_output(['exiftool','-createdate']+cr2files).split('\n')[:-2]
 
-   names = [ f.split(' ')[-1] for f in out[0::2] ]
-   year =  [ f.split(':')[1].strip() for f in out[1::2] ]
-   month = [ f.split(':')[2].strip() for f in out[1::2] ]
+      names = [ f.split(' ')[-1] for f in out[0::2] ]
+      year =  [ f.split(':')[1].strip() for f in out[1::2] ]
+      month = [ f.split(':')[2].strip() for f in out[1::2] ]
 
-   for i in range(0,len(names)):
-     d = '/'.join([picsavdir,year[i],month[i],'raw'])
-     mkdir_p(d)
-     shutil.copy(names[i], d)
+      for i in range(0,len(names)):
+        d = '/'.join([rawsavdir,year[i],month[i]])
+        mkdir_p(d)
+        shutil.copy(names[i], d)
 
    #Now any movie files
+   if movfiles:
+      # use exiftool to get created date for year/month directory structure
+      out = subprocess.check_output(['exiftool','-config','/share/homes/john/scripts/config.exiftool','-createdate']+movfiles).split('\n')[:-2]
 
+      names = [ f.split(' ')[-1] for f in out[0::2] ]
+      year =  [ f.split(':')[1].strip() for f in out[1::2] ]
+      month = [ f.split(':')[2].strip() for f in out[1::2] ]
 
-   
+      for i in range(0,len(names)):
+        d = '/'.join([movsavdir,year[i],month[i]])
+        mkdir_p(d)
+        shutil.copy(names[i], d)
+
 
 def main(argv=None):
 
    check_if_running()
    try:
-      file(pidfile, 'w').write(str(os.getpid()))
+      with open(pidfile, 'w') as out:
+         out.write(str(os.getpid()))
       organize_photos()
    finally:
       os.unlink(pidfile)
